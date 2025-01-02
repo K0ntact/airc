@@ -16,3 +16,4 @@ ipython_config.py
 /.idea/
 test.ipynb
 *__pycache__/
+/wandb/
