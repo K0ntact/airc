@@ -160,6 +160,11 @@ class ATMADataset(Dataset):
                 if span[0] < start_frame < span[1] or span[0] < end_frame < span[1]:
                     label[1] = 1
                     break
+                else:
+                    label[0] = 1
+
+            if label[0] == 0 and label[1] == 0:
+                raise RuntimeError(f"Label not found for video {video_path} at tensor {tensor_idx}")
 
             label = torch.tensor(label, dtype=torch.float32)
 
