@@ -70,7 +70,7 @@ class TimesformerGRU(nn.Module):
             x (Tensor): Input tensor of shape (batch, gru_input_length, window_length, channels, height, width)
 
         Returns:
-            Tensor: Classification logits for each window in the input tensor (batch, gru_input_length, num_classes)
+            Tensor: Classification logits
         """
         batch_size, seq_length = x.shape[:2]
 
@@ -86,14 +86,16 @@ class TimesformerGRU(nn.Module):
             tokens.view(seq_length, -1) for tokens in cls_tokens
         ], dim=0)  # Shape: (batch_size, seq_length, hidden_size)
 
-        output, final_hidden = self.gru(cls_token_batch)    # Output Shape: (batch_size, seq_length, gru_hidden_size)
+        output, final_hidden = self.gru(cls_token_batch)
+        # Output Shape: (batch_size, seq_length, gru_hidden_size)
+        # Final Hidden Shape: (num_layers, batch_size, gru_hidden_size)
 
-        # Return final hidden output
+        # Return final hidden output of the last layer
         predictions = []
         for batch_idx in range(batch_size):
-            prediction = self.classifier(final_hidden[batch_idx])
+            prediction = self.classifier(final_hidden[-1][batch_idx])
             predictions.append(prediction)
-        predictions = torch.stack(predictions, dim=0).squeeze(1)   # Shape: (batch_size, num_classes)
+        predictions = torch.stack(predictions, dim=0)   # Shape: (batch_size, num_classes)
 
         # Return all output of GRU
         # predictions = []
