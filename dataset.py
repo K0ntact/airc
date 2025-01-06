@@ -7,44 +7,61 @@ import cv2
 
 
 class ATMADataset(Dataset):
-    def __init__(self, vid_folder_path, label_path):
+    def __init__(self, vid_folder_path, label_path, seq_len=30):
+        self.vid_folder_path = vid_folder_path
+        self.label_path = label_path
         self.label_idx = {'normal': 0, 'anomaly': 1}
+        self.seq_len = seq_len
 
         # Sliding window parameters
         self.buffer_size = 16
         self.frame_sample_per_second = 8
 
-        self.video_paths = self._get_input_path(vid_folder_path)
-        self.anomaly_span = self._get_anomaly_spans(label_path)
+        self.video_paths = self._get_input_path()
+        self.anomaly_span = self._get_anomaly_spans()
         self.video_tensor_idx_mapping = self._create_video_tensor_idx_mapping()
+        self.video_tensor_sequence_mapping = self._get_tensor_sequence()
 
     def __len__(self):
-        return len(self.video_tensor_idx_mapping)
+        return len(self.video_tensor_sequence_mapping)
 
     def __getitem__(self, idx):
-        vid_path, tensor_idx = self.video_tensor_idx_mapping[idx]
-        frame_buffer, label = self._load_frame_tensor(vid_path, tensor_idx)
-        return frame_buffer, label
+        vid_path, tensor_seq = self.video_tensor_sequence_mapping[idx]
+        seq_frame_tensors = []
+        seq_labels = []
+        for tensor_idx in tensor_seq:
+            frame_buffer, label = self._load_frame_tensor(vid_path, tensor_idx)
+            seq_frame_tensors.append(frame_buffer)
+            seq_labels.append(label)
 
-    def _get_input_path(self, folder_path: str) -> list[str]:
+        seq_frame_tensors = torch.stack(seq_frame_tensors, dim=0)  # (seq_len, T, C, H, W)
+
+        # Get label for each tensor in the sequence
+        # TODO: pad seq_frame_tensors and seq_labels to self.seq_len
+        # seq_labels = torch.stack(seq_labels, dim=0)  # (seq_len, 2)
+
+        # Get only the last label
+        seq_labels = seq_labels[-1]
+        return seq_frame_tensors, seq_labels
+
+    def _get_input_path(self) -> list[str]:
         """
         Read the folder and returns list of sorted video paths
         """
         video_paths = []
-        for root, dirs, files in os.walk(folder_path):
+        for root, dirs, files in os.walk(self.vid_folder_path):
             for file in files:
                 video_paths.append(os.path.join(root, file))
         return sorted(video_paths)
 
-    def _get_anomaly_spans(self, label_path: str):
+    def _get_anomaly_spans(self):
         """
         Extract anomaly spans for each video from label file.
         Anomaly spans are rescaled since input videos were augmented to have 30fps.
 
-        :param label_path: Path to label file
         :return: List of rescaled anomaly spans for each video
         """
-        with open(label_path, 'r') as f:
+        with open(self.label_path, 'r') as f:
             lines = f.readlines()
         all_anomaly_spans = []
         for path in self.video_paths:
@@ -96,9 +113,10 @@ class ATMADataset(Dataset):
             self,
             video_path: str,
             tensor_idx: int
-    ) -> tuple[torch.Tensor, int]:
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """
         Load specific frame tensor from video by skipping to correct position.
+        Extract label for the tensor based on anomaly spans.
 
         :param video_path: Path to video file
         :param tensor_idx: Which tensor to extract (0-based index)
@@ -129,18 +147,21 @@ class ATMADataset(Dataset):
                 raise IndexError(f"Tensor index {tensor_idx} out of bounds")
 
             # Determine label for this tensor
-            label = self.label_idx['normal']
+            # label: array of 2 elements, 0th element is normal, 1st element is anomaly
+            label = [0, 0]
             input_index = self.video_paths.index(video_path)
             anomaly_spans = self.anomaly_span[input_index]
             start_frame = target_frames[start_pos]
             end_frame = target_frames[end_pos - 1]
             for span in anomaly_spans:
                 if span[0] == -1:
-                    label = self.label_idx['normal']
+                    label[0] = 1
                     break
                 if span[0] < start_frame < span[1] or span[0] < end_frame < span[1]:
-                    label = self.label_idx['anomaly']
+                    label[1] = 1
                     break
+
+            label = torch.tensor(label, dtype=torch.float32)
 
             # Get the frames we need for this tensor
             tensor_target_frames = target_frames[start_pos:end_pos]
@@ -168,3 +189,32 @@ class ATMADataset(Dataset):
 
         finally:
             cap.release()
+
+    def _get_tensor_sequence(self):
+        """
+        Extract sequence of frame tensor with length seq_len for each video
+        """
+        # (1.mp4, 1), (1.mp4, 2), (1.mp4, 3),...
+        # seq_len = 5
+        # Output: (1.mp4, [1,2,3,4,5]), (1.mp4, [2,3,4,5,6]), (1.mp4, [3,4,5,6,7]),...
+
+        mapping = []
+        seq = []
+        previous_vid_path = ""
+        previous_tensor_idx = -1
+        for tup in self.video_tensor_idx_mapping:
+            vid_path, tensor_idx = tup
+
+            if (previous_tensor_idx + 1) != tensor_idx:    # new video
+                if len(seq) != self.seq_len and previous_tensor_idx < self.seq_len:    # end of a vid with total tensors < seq len
+                    mapping.append((previous_vid_path, seq))
+                seq = []
+
+            previous_vid_path = vid_path
+            previous_tensor_idx = tensor_idx
+            seq.append(tensor_idx)
+            if len(seq) == self.seq_len:    # end of a vid with total tensors >= seq len
+                mapping.append((vid_path, seq))
+                seq = seq[1:]
+
+        return mapping

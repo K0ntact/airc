@@ -1,6 +1,7 @@
 from transformers import TimesformerModel, AutoImageProcessor
 import torch
 import torch.nn as nn
+from torch.nn.functional import softmax
 from torch import Tensor
 
 
@@ -69,7 +70,7 @@ class TimesformerGRU(nn.Module):
             x (Tensor): Input tensor of shape (batch, gru_input_length, window_length, channels, height, width)
 
         Returns:
-            Tensor: Classification logits
+            Tensor: Classification logits for each window in the input tensor (batch, gru_input_length, num_classes)
         """
         batch_size, seq_length = x.shape[:2]
 
@@ -85,7 +86,24 @@ class TimesformerGRU(nn.Module):
             tokens.view(seq_length, -1) for tokens in cls_tokens
         ], dim=0)  # Shape: (batch_size, seq_length, hidden_size)
 
-        _, hidden = self.gru(cls_token_batch)
-        final_hidden = self.dropout(hidden[-1])
+        output, final_hidden = self.gru(cls_token_batch)    # Output Shape: (batch_size, seq_length, gru_hidden_size)
 
-        return self.classifier(final_hidden)
+        # Return final hidden output
+        predictions = []
+        for batch_idx in range(batch_size):
+            prediction = self.classifier(final_hidden[batch_idx])
+            predictions.append(prediction)
+        predictions = torch.stack(predictions, dim=0).squeeze(1)   # Shape: (batch_size, num_classes)
+
+        # Return all output of GRU
+        # predictions = []
+        # for batch in range(batch_size):
+        #     predict_batch = []
+        #     for seq in range(seq_length):
+        #         prediction = self.classifier(output[batch, seq])
+        #         predict_batch.append(prediction)
+        #     predictions.append(torch.stack(predict_batch, dim=0))
+        # predictions = torch.stack(predictions, dim=0)   # Shape: (batch_size, seq_length, num_classes)
+
+        predictions = softmax(predictions, dim=-1)
+        return predictions
