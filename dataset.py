@@ -34,10 +34,13 @@ class ATMADataset(Dataset):
             seq_frame_tensors.append(frame_buffer)
             seq_labels.append(label)
 
+        # Pad to the start of the sequence to self.seq_len
+        while len(seq_frame_tensors) < self.seq_len:
+            seq_frame_tensors.insert(0, torch.zeros_like(seq_frame_tensors[0]))
+
         seq_frame_tensors = torch.stack(seq_frame_tensors, dim=0)  # (seq_len, T, C, H, W)
 
         # Get label for each tensor in the sequence
-        # TODO: pad seq_frame_tensors and seq_labels to self.seq_len
         # seq_labels = torch.stack(seq_labels, dim=0)  # (seq_len, 2)
 
         # Get only the last label
