@@ -1,4 +1,4 @@
-from transformers import TimesformerModel, AutoImageProcessor
+from transformers import TimesformerModel
 import torch
 import torch.nn as nn
 from torch.nn.functional import softmax
@@ -26,7 +26,6 @@ class TimesformerGRU(nn.Module):
         """
         super().__init__()
 
-        self.processor = AutoImageProcessor.from_pretrained(pretrained_tsf)
         self.timesformer = TimesformerModel.from_pretrained(pretrained_tsf)
 
         # No Timesformer training for now
@@ -44,24 +43,6 @@ class TimesformerGRU(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(gru_hidden_size, num_classes)
 
-    @torch.no_grad()
-    def extract_features(self, window: Tensor) -> Tensor:
-        """
-        Extract features from a window of frames using Timesformer.
-
-        Args:
-            window (Tensor): Input window of shape (window_length, channels, height, width)
-
-        Returns:
-            Tensor: CLS tokens for the window
-        """
-        x_list = [frame for frame in window]
-        inputs = self.processor(images=x_list, return_tensors="pt")
-        inputs = {k: v.to(window.device) for k, v in inputs.items()}
-
-        outputs = self.timesformer(**inputs)
-        return outputs[0][:, 0, :]
-
     def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass of the model.
@@ -76,11 +57,10 @@ class TimesformerGRU(nn.Module):
 
         cls_tokens = []
         for batch_idx in range(batch_size):
-            sequence_tokens = []
-            for seq_idx in range(seq_length):
-                cls_token = self.extract_features(x[batch_idx, seq_idx])
-                sequence_tokens.append(cls_token)
-            cls_tokens.append(torch.cat(sequence_tokens, dim=0))
+            with torch.no_grad():
+                outputs = self.timesformer(x[batch_idx])
+            seq_cls_tokens = outputs[0][:, 0, :]  # Shape: (seq_length, hidden_size)
+            cls_tokens.append(seq_cls_tokens)
 
         cls_token_batch = torch.stack([
             tokens.view(seq_length, -1) for tokens in cls_tokens
