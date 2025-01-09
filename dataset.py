@@ -39,6 +39,7 @@ class ATMADataset(Dataset):
             seq_frame_tensors.insert(0, torch.zeros_like(seq_frame_tensors[0]))
 
         seq_frame_tensors = torch.stack(seq_frame_tensors, dim=0)  # (seq_len, T, C, H, W)
+        seq_frame_tensors = seq_frame_tensors / 255.0
 
         # Get label for each tensor in the sequence
         # seq_labels = torch.stack(seq_labels, dim=0)  # (seq_len, 2)
