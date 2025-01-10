@@ -7,11 +7,12 @@ import cv2
 
 
 class ATMADataset(Dataset):
-    def __init__(self, vid_folder_path, label_path, seq_len=30):
+    def __init__(self, vid_folder_path, label_path, seq_len=30, cached_path=None):
         self.vid_folder_path = vid_folder_path
         self.label_path = label_path
         self.label_idx = {'normal': 0, 'anomaly': 1}
         self.seq_len = seq_len
+        self.cached_path = cached_path
 
         # Sliding window parameters
         self.buffer_size = 16
@@ -30,9 +31,18 @@ class ATMADataset(Dataset):
         seq_frame_tensors = []
         seq_labels = []
         for tensor_idx in tensor_seq:
-            frame_buffer, label = self._load_frame_tensor(vid_path, tensor_idx)
-            seq_frame_tensors.append(frame_buffer)
-            seq_labels.append(label)
+            if self.cached_path is not None:
+                video_name = os.path.basename(vid_path).split(".")[0]
+                tensor_name = f"{video_name}_window_{tensor_idx}.pt"
+                tensor_path = os.path.join(self.cached_path, tensor_name)
+                data = torch.load(tensor_path)
+                seq_frame_tensors.append(data["tensor"])
+                seq_labels.append(data["label"])
+
+            else:
+                frame_buffer, label = self._load_frame_tensor(vid_path, tensor_idx)
+                seq_frame_tensors.append(frame_buffer)
+                seq_labels.append(label)
 
         # Pad to the start of the sequence to self.seq_len
         while len(seq_frame_tensors) < self.seq_len:
