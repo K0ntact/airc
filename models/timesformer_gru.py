@@ -32,6 +32,8 @@ class TimesformerGRU(nn.Module):
         for param in self.timesformer.parameters():
             param.requires_grad = False
 
+        self.input_norm = nn.LayerNorm(768)
+
         self.gru = nn.GRU(
             input_size=768,  # Timesformer's hidden size
             hidden_size=gru_hidden_size,
@@ -39,6 +41,8 @@ class TimesformerGRU(nn.Module):
             batch_first=True,
             dropout=dropout if gru_layers > 1 else 0
         )
+
+        self.output_norm = nn.LayerNorm(gru_hidden_size)
 
         self.dropout = nn.Dropout(dropout)
         self.classifier = nn.Linear(gru_hidden_size, num_classes)
@@ -65,18 +69,18 @@ class TimesformerGRU(nn.Module):
         cls_token_batch = torch.stack([
             tokens.view(seq_length, -1) for tokens in cls_tokens
         ], dim=0)  # Shape: (batch_size, seq_length, hidden_size)
+        cls_token_batch = self.input_norm(cls_token_batch)
+
+        torch.nn.utils.clip_grad_norm_(self.gru.parameters(), max_norm=1.0)
 
         output, final_hidden = self.gru(cls_token_batch)
         # Output Shape: (batch_size, seq_length, gru_hidden_size)
         # Final Hidden Shape: (num_layers, batch_size, gru_hidden_size)
 
         # Return final hidden output of the last layer
-        predictions = []
-        for batch_idx in range(batch_size):
-            prediction = self.classifier(final_hidden[-1][batch_idx])
-            predictions.append(prediction)
-        predictions = torch.stack(predictions, dim=0)   # Shape: (batch_size, num_classes)
-
+        norm_last_layer_hidden = self.output_norm(final_hidden[-1]) # (batch_size, gru_hidden_size)
+        logits = self.classifier(norm_last_layer_hidden)
+        
         # Return all output of GRU
         # predictions = []
         # for batch in range(batch_size):
@@ -87,5 +91,4 @@ class TimesformerGRU(nn.Module):
         #     predictions.append(torch.stack(predict_batch, dim=0))
         # predictions = torch.stack(predictions, dim=0)   # Shape: (batch_size, seq_length, num_classes)
 
-        predictions = softmax(predictions, dim=-1)
-        return predictions
+        return logits

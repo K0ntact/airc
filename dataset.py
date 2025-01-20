@@ -162,25 +162,25 @@ class ATMADataset(Dataset):
 
             # Determine label for this tensor
             # label: array of 2 elements, 0th element is normal, 1st element is anomaly
-            label = [0, 0]
+            label = -1
             input_index = self.video_paths.index(video_path)
             anomaly_spans = self.anomaly_span[input_index]
             start_frame = target_frames[start_pos]
             end_frame = target_frames[end_pos - 1]
             for span in anomaly_spans:
                 if span[0] == -1:
-                    label[0] = 1
+                    label = 0
                     break
                 if span[0] < start_frame < span[1] or span[0] < end_frame < span[1]:
-                    label[1] = 1
+                    label = 1
                     break
                 else:
-                    label[0] = 1
+                    label = 0
 
-            if label[0] == 0 and label[1] == 0:
+            if label == -1:
                 raise RuntimeError(f"Label not found for video {video_path} at tensor {tensor_idx}")
 
-            label = torch.tensor(label, dtype=torch.float32)
+            label = torch.tensor(label)
 
             # Get the frames we need for this tensor
             tensor_target_frames = target_frames[start_pos:end_pos]
