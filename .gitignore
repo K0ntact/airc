@@ -15,5 +15,6 @@ ipython_config.py
 /datasets/
 /.idea/
 test.ipynb
+test2.ipynb
 *__pycache__/
 /wandb/
