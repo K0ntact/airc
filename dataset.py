@@ -248,7 +248,7 @@ class TimesformerData(Dataset):
         self.cached_path = cached_path
 
         # Sliding window parameters
-        self.buffer_size = 96
+        self.buffer_size = 8
         self.frame_sample_per_second = 4
 
         self.video_paths = self._get_input_path()
