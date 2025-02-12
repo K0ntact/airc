@@ -2,11 +2,11 @@ import os
 import torch
 import argparse
 from tqdm import tqdm
-from dataset import ATMADataset
+from dataset import TimesformerGRUData
 
 
 def main(vid_folder_path, label_path, output_dir):
-    dataset = ATMADataset(vid_folder_path=vid_folder_path, label_path=label_path)
+    dataset = TimesformerGRUData(vid_folder_path=vid_folder_path, label_path=label_path)
     os.makedirs(output_dir, exist_ok=True)
 
     video_windows = {}

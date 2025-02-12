@@ -8,7 +8,7 @@ from tqdm import tqdm
 from transformers.optimization import get_linear_schedule_with_warmup
 import wandb
 
-from dataset import ATMADataset
+from dataset import TimesformerGRUData
 from models.timesformer_gru import TimesformerGRU
 
 model = TimesformerGRU(pretrained_tsf="facebook/timesformer-base-finetuned-k400",
@@ -71,8 +71,8 @@ if __name__ == "__main__":
     warm_up_steps = 100
     num_epochs = 3
 
-    dataset = ATMADataset(vid_folder_path="./datasets/ATMA-V/videos/train/aug",
-                        label_path="./datasets/ATMA-V/labels/labels.txt")
+    dataset = TimesformerGRUData(vid_folder_path="./datasets/ATMA-V/videos/train/aug",
+                                 label_path="./datasets/ATMA-V/labels/labels.txt")
 
     train_sampler = RandomSampler(dataset)
     train_dataloader = DataLoader(dataset, sampler=train_sampler, batch_size=batch_size)
