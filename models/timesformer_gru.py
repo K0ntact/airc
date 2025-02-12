@@ -1,7 +1,6 @@
 from transformers import TimesformerModel
 import torch
 import torch.nn as nn
-from torch.nn.functional import softmax
 from torch import Tensor
 
 
