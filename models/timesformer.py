@@ -19,6 +19,5 @@ class CustomTimesformer(nn.Module):
         :return: Classification logits
         """
 
-        with torch.no_grad():
-            batch_cls_tokens = self.timesformer(x)[0][:, 0, :]
+        batch_cls_tokens = self.timesformer(x)[0][:, 0, :]
         return self.classifier(batch_cls_tokens)
